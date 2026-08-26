@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Cold-start splash matches the composed background so boot into the locked
+         launcher is seamless. -->
+    <style name="Theme.PPNAMLauncher" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/graphite_background</item>
+        <item name="android:colorBackground">@color/graphite_background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Android 11+ package visibility: without these queries the launcher cannot see the
+         station apps at all — getLaunchIntentForPackage returns null and every tile shows
+         "Not installed" with no icon. The MAIN intent query covers launchable apps broadly;
+         the explicit packages pin down the kiosk allowlist regardless. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+        </intent>
+        <package android:name="com.mitas.ppnam.station1aa" />
+        <package android:name="com.mitas.ppnam.station2aa" />
+        <package android:name="com.mitas.ppnam.station3aa" />
+        <package android:name="com.mitas.ppnam.station4aa" />
+        <package android:name="com.mitas.ppnam.station5aa" />
+        <package android:name="com.rscja.infowedge" />
+        <package android:name="com.rscja.scanner" />
+        <package android:name="com.android.settings" />
+    </queries>
+
+    <application
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.PPNAMLauncher">
+
+        <!-- lockTaskMode="if_whitelisted": when this activity is the forced HOME on a
+             provisioned device it starts pinned straight from boot, before any code runs.
+             KioskManager clears the lock-task allowlist when a supervisor exits kiosk, so
+             this never pins an unlocked device. -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:launchMode="singleTask"
+            android:lockTaskMode="if_whitelisted"
+            android:theme="@style/Theme.PPNAMLauncher">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- HOME filter (separate from LAUNCHER so the app keeps its drawer entry):
+                 lets the device-owner policy force this activity as the home screen, so
+                 boot, the Home button and closing any app all land back here. -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <!-- Target for `dpm set-device-owner`; kiosk policy itself lives in KioskManager. -->
+        <receiver
+            android:name=".KioskDeviceAdminReceiver"
+            android:exported="true"
+            android:permission="android.permission.BIND_DEVICE_ADMIN">
+            <meta-data
+                android:name="android.app.device_admin"
+                android:resource="@xml/device_admin" />
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+            </intent-filter>
+        </receiver>
+
+    </application>
+
+</manifest>

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Family graphite background, matching the station apps' cold-start splash. -->
+    <color name="graphite_background">#FF07101A</color>
+</resources>

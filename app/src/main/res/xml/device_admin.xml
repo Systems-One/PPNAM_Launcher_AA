@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- support-transfer-ownership: lets an existing device owner (the retired Station 1
+     lockdown) hand ownership to this launcher via DevicePolicyManager.transferOwnership
+     instead of a factory reset. No policies requested: device-owner provisioning grants
+     everything KioskManager needs. -->
+<device-admin xmlns:android="http://schemas.android.com/apk/res/android">
+    <support-transfer-ownership />
+    <uses-policies />
+</device-admin>
