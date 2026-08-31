@@ -7,6 +7,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.ActivityInfo
 import android.os.Build
 import android.os.UserManager
 import android.util.Log
@@ -19,7 +20,7 @@ import android.util.Log
  * launcher as the forced HOME activity: the device boots straight into the launcher grid,
  * and the Home button — or backing out of any allowed app — always returns to it. The
  * status bar shows only system info (wifi, battery, clock) and cannot be expanded;
- * Recents and every other app stay unavailable. Supervisors toggle kiosk from the
+ * Recents and every other app stay unavailable, and the launcher is held in portrait. Supervisors toggle kiosk from the
  * PIN-locked panel inside the launcher. Without device ownership every call here is a
  * no-op, so development installs behave normally.
  */
@@ -57,6 +58,9 @@ object KioskManager {
      * lockTaskMode="if_whitelisted" in the manifest; this is the belt to that braces.
      */
     fun ensurePinned(activity: Activity) {
+        // Applied on every resume, not just the one that pins: the activity can be
+        // recreated inside an already-pinned task and would otherwise come back rotatable.
+        applyOrientationLock(activity, locked = isDeviceOwner(activity) && isKioskEnabled(activity))
         val shouldPin = KioskPolicy.shouldPin(
             isDeviceOwner = isDeviceOwner(activity),
             kioskEnabled = isKioskEnabled(activity),
@@ -75,6 +79,7 @@ object KioskManager {
     /** Supervisor action: release the device until kiosk is re-enabled. */
     fun exitKiosk(activity: Activity) {
         setEnabled(activity, false)
+        applyOrientationLock(activity, locked = false)
         releasePolicies(activity)
         if (isPinned(activity)) {
             try {
@@ -91,6 +96,18 @@ object KioskManager {
         setEnabled(activity, true)
         ensurePinned(activity)
         Log.w(TAG, "Kiosk enabled by supervisor")
+    }
+
+    /**
+     * Kiosk holds the launcher in portrait ("vertical"); unlocked, the device rotates
+     * normally so supervisors can use Settings and station apps however they like.
+     */
+    private fun applyOrientationLock(activity: Activity, locked: Boolean) {
+        activity.requestedOrientation = if (locked) {
+            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        } else {
+            ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
     }
 
     private fun setEnabled(context: Context, enabled: Boolean) {
