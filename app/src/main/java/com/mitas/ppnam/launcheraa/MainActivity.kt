@@ -35,6 +35,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -63,16 +64,32 @@ class MainActivity : ComponentActivity() {
 
     private val tiles = mutableStateOf<List<Tile>>(emptyList())
 
+    /**
+     * What the supervisor panel renders from. Observable and re-read on every resume and
+     * after every supervisor action: exitKiosk() releases the portrait lock, which
+     * recreates this activity, so a value read once at composition is stale by the time
+     * the panel redraws.
+     */
+    private val deviceOwner = mutableStateOf(false)
+    private val kioskEnabled = mutableStateOf(true)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        refreshKioskState()
         setContent {
             LauncherScreen(
                 tiles = tiles.value,
                 onLaunch = { KioskApps.launch(this, it) },
-                isDeviceOwner = { KioskManager.isDeviceOwner(this) },
-                isKioskEnabled = { KioskManager.isKioskEnabled(this) },
-                onEnterKiosk = { KioskManager.enterKiosk(this) },
-                onExitKiosk = { KioskManager.exitKiosk(this) },
+                isDeviceOwner = deviceOwner.value,
+                isKioskEnabled = kioskEnabled.value,
+                onEnterKiosk = {
+                    KioskManager.enterKiosk(this)
+                    refreshKioskState()
+                },
+                onExitKiosk = {
+                    KioskManager.exitKiosk(this)
+                    refreshKioskState()
+                },
             )
         }
     }
@@ -80,6 +97,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         KioskManager.ensurePinned(this)
+        refreshKioskState()
         // Rebuilt on every resume so a tile appears the moment its app gets installed.
         tiles.value = KioskApps.entries.map { entry ->
             val installed = KioskApps.isInstalled(this, entry)
@@ -92,17 +110,25 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun refreshKioskState() {
+        deviceOwner.value = KioskManager.isDeviceOwner(this)
+        kioskEnabled.value = KioskManager.isKioskEnabled(this)
+    }
+
     @Composable
     private fun LauncherScreen(
         tiles: List<Tile>,
         onLaunch: (KioskApps.Entry) -> Unit,
-        isDeviceOwner: () -> Boolean,
-        isKioskEnabled: () -> Boolean,
+        isDeviceOwner: Boolean,
+        isKioskEnabled: Boolean,
         onEnterKiosk: () -> Unit,
         onExitKiosk: () -> Unit,
     ) {
-        var showPinDialog by remember { mutableStateOf(false) }
-        var showLockdownDialog by remember { mutableStateOf(false) }
+        // rememberSaveable, not remember: exiting kiosk releases the orientation lock and
+        // recreates this activity. With plain remember the panel vanished mid-action and
+        // looked to the supervisor like the exit had silently failed.
+        var showPinDialog by rememberSaveable { mutableStateOf(false) }
+        var showLockdownDialog by rememberSaveable { mutableStateOf(false) }
 
         Surface(modifier = Modifier.fillMaxSize(), color = GraphiteBackground) {
             Column(
@@ -167,8 +193,8 @@ class MainActivity : ComponentActivity() {
 
         if (showLockdownDialog) {
             LockdownDialog(
-                isDeviceOwner = isDeviceOwner(),
-                isKioskEnabled = isKioskEnabled(),
+                isDeviceOwner = isDeviceOwner,
+                isKioskEnabled = isKioskEnabled,
                 onEnterKiosk = onEnterKiosk,
                 onExitKiosk = onExitKiosk,
                 onDismiss = { showLockdownDialog = false },
@@ -286,8 +312,6 @@ class MainActivity : ComponentActivity() {
         onExitKiosk: () -> Unit,
         onDismiss: () -> Unit,
     ) {
-        var enabled by remember { mutableStateOf(isKioskEnabled) }
-
         AlertDialog(
             onDismissRequest = onDismiss,
             containerColor = GraphiteSurface,
@@ -300,7 +324,7 @@ class MainActivity : ComponentActivity() {
                                 "dpm set-device-owner com.mitas.ppnam.launcheraa/.KioskDeviceAdminReceiver",
                             color = TextMuted
                         )
-                        enabled -> Text(
+                        isKioskEnabled -> Text(
                             "Kiosk is active: the device is confined to the apps on this " +
                                 "launcher. Exiting frees Home, Recents and all other apps " +
                                 "until kiosk is re-entered.",
@@ -315,16 +339,16 @@ class MainActivity : ComponentActivity() {
                 }
             },
             confirmButton = {
-                if (isDeviceOwner) {
-                    TextButton(onClick = {
-                        if (enabled) onExitKiosk() else onEnterKiosk()
-                        enabled = !enabled
-                    }) {
-                        Text(
-                            if (enabled) "Exit Kiosk Mode" else "Enter Kiosk Mode",
-                            color = if (enabled) WarnAmber else DangerRed
-                        )
-                    }
+                when (LockdownPanel.actionFor(isDeviceOwner, isKioskEnabled)) {
+                    LockdownPanel.Action.EXIT_KIOSK ->
+                        TextButton(onClick = onExitKiosk) {
+                            Text("Exit Kiosk Mode", color = WarnAmber)
+                        }
+                    LockdownPanel.Action.ENTER_KIOSK ->
+                        TextButton(onClick = onEnterKiosk) {
+                            Text("Enter Kiosk Mode", color = DangerRed)
+                        }
+                    LockdownPanel.Action.NONE -> Unit
                 }
             },
             dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
