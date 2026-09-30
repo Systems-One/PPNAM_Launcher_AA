@@ -14,7 +14,6 @@
         <package android:name="com.mitas.ppnam.station3aa" />
         <package android:name="com.mitas.ppnam.station4aa" />
         <package android:name="com.mitas.ppnam.station5aa" />
-        <package android:name="com.rscja.infowedge" />
         <package android:name="com.rscja.scanner" />
         <package android:name="com.android.settings" />
     </queries>

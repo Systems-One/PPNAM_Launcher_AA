@@ -37,6 +37,17 @@ class LockdownPanelTest {
         )
     }
 
+    /** Removal is the only way off a provisioned device short of a recovery wipe. */
+    @Test
+    fun `offers device-owner removal whenever the launcher owns the device`() {
+        assertEquals(true, LockdownPanel.offersRemoval(isDeviceOwner = true))
+    }
+
+    @Test
+    fun `offers no removal without device-owner rights`() {
+        assertEquals(false, LockdownPanel.offersRemoval(isDeviceOwner = false))
+    }
+
     /** The panel is re-derived, never toggled: a stale flag is what caused the bug. */
     @Test
     fun `action follows the live kiosk flag both ways`() {

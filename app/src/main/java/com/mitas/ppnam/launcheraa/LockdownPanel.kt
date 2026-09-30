@@ -23,4 +23,11 @@ object LockdownPanel {
         kioskEnabled -> Action.EXIT_KIOSK
         else -> Action.ENTER_KIOSK
     }
+
+    /**
+     * Removing the device owner is offered in both kiosk states: it is how a scanner is
+     * decommissioned or re-provisioned, since a device owner can't be uninstalled and the
+     * lockdown blocks the factory reset in Settings.
+     */
+    fun offersRemoval(isDeviceOwner: Boolean): Boolean = isDeviceOwner
 }

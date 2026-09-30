@@ -1,6 +1,7 @@
 package com.mitas.ppnam.launcheraa
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -19,7 +20,7 @@ class KioskAppsTest {
     }
 
     @Test
-    fun `allowlist covers the launcher, stations, settings, wedge and keyboard emulator`() {
+    fun `allowlist covers the launcher, stations, settings and keyboard emulator`() {
         val packages = KioskApps.lockTaskPackages("com.mitas.ppnam.launcheraa").toList()
         listOf(
             "com.mitas.ppnam.launcheraa",
@@ -29,9 +30,47 @@ class KioskAppsTest {
             "com.mitas.ppnam.station4aa",
             "com.mitas.ppnam.station5aa",
             "com.android.settings",
-            "com.rscja.infowedge",
             "com.rscja.scanner",
         ).forEach { pkg -> assertTrue("missing $pkg", pkg in packages) }
+    }
+
+    @Test
+    fun `operators see only the station tiles`() {
+        assertEquals(
+            listOf(
+                "com.mitas.ppnam.station1aa",
+                "com.mitas.ppnam.station2aa",
+                "com.mitas.ppnam.station3aa",
+                "com.mitas.ppnam.station4aa",
+                "com.mitas.ppnam.station5aa",
+            ),
+            KioskApps.visibleEntries(supervisorUnlocked = false).map { it.packageName }
+        )
+    }
+
+    @Test
+    fun `supervisor PIN reveals keyboard emulator and settings`() {
+        val visible = KioskApps.visibleEntries(supervisorUnlocked = true).map { it.packageName }
+        assertEquals(KioskApps.entries.map { it.packageName }, visible)
+        assertTrue("com.rscja.scanner" in visible)
+        assertTrue("com.android.settings" in visible)
+    }
+
+    /** Hidden is not blocked: supervisor tiles must still launch while the device is pinned. */
+    @Test
+    fun `supervisor-only apps stay in the lock task allowlist`() {
+        val packages = KioskApps.lockTaskPackages("com.mitas.ppnam.launcheraa").toList()
+        KioskApps.entries.filter { it.supervisorOnly }.forEach {
+            assertTrue("missing ${it.packageName}", it.packageName in packages)
+        }
+    }
+
+    /** Keyboard Wedge was dropped from the kiosk: not needed, so not reachable. */
+    @Test
+    fun `allowlist excludes the keyboard wedge`() {
+        val packages = KioskApps.lockTaskPackages("com.mitas.ppnam.launcheraa").toList()
+        assertFalse("com.rscja.infowedge" in packages)
+        assertFalse(KioskApps.entries.any { it.packageName == "com.rscja.infowedge" })
     }
 
     @Test
