@@ -73,13 +73,23 @@ class MainActivity : ComponentActivity() {
     private val deviceOwner = mutableStateOf(false)
     private val kioskEnabled = mutableStateOf(true)
 
+    /**
+     * True once the supervisor PIN is entered: reveals the supervisor-only tiles. Survives
+     * the recreation exitKiosk() triggers, but is dropped the moment the launcher leaves
+     * the screen (an app opened, screen off) so the tiles never stay exposed.
+     */
+    private val supervisorUnlocked = mutableStateOf(false)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        supervisorUnlocked.value = savedInstanceState?.getBoolean(KEY_SUPERVISOR_UNLOCKED) ?: false
         refreshKioskState()
         setContent {
+            val visible = KioskApps.visibleEntries(supervisorUnlocked.value)
             LauncherScreen(
-                tiles = tiles.value,
+                tiles = tiles.value.filter { it.entry in visible },
                 onLaunch = { KioskApps.launch(this, it) },
+                onSupervisorUnlocked = { supervisorUnlocked.value = true },
                 isDeviceOwner = deviceOwner.value,
                 isKioskEnabled = kioskEnabled.value,
                 onEnterKiosk = {
@@ -88,6 +98,10 @@ class MainActivity : ComponentActivity() {
                 },
                 onExitKiosk = {
                     KioskManager.exitKiosk(this)
+                    refreshKioskState()
+                },
+                onRemoveOwner = {
+                    KioskManager.removeDeviceOwner(this)
                     refreshKioskState()
                 },
             )
@@ -110,6 +124,16 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStop() {
+        super.onStop()
+        if (!isChangingConfigurations) supervisorUnlocked.value = false
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putBoolean(KEY_SUPERVISOR_UNLOCKED, supervisorUnlocked.value)
+    }
+
     private fun refreshKioskState() {
         deviceOwner.value = KioskManager.isDeviceOwner(this)
         kioskEnabled.value = KioskManager.isKioskEnabled(this)
@@ -119,16 +143,19 @@ class MainActivity : ComponentActivity() {
     private fun LauncherScreen(
         tiles: List<Tile>,
         onLaunch: (KioskApps.Entry) -> Unit,
+        onSupervisorUnlocked: () -> Unit,
         isDeviceOwner: Boolean,
         isKioskEnabled: Boolean,
         onEnterKiosk: () -> Unit,
         onExitKiosk: () -> Unit,
+        onRemoveOwner: () -> Unit,
     ) {
         // rememberSaveable, not remember: exiting kiosk releases the orientation lock and
         // recreates this activity. With plain remember the panel vanished mid-action and
         // looked to the supervisor like the exit had silently failed.
         var showPinDialog by rememberSaveable { mutableStateOf(false) }
         var showLockdownDialog by rememberSaveable { mutableStateOf(false) }
+        var showRemoveConfirm by rememberSaveable { mutableStateOf(false) }
 
         Surface(modifier = Modifier.fillMaxSize(), color = GraphiteBackground) {
             Column(
@@ -186,6 +213,7 @@ class MainActivity : ComponentActivity() {
                 onDismiss = { showPinDialog = false },
                 onUnlocked = {
                     showPinDialog = false
+                    onSupervisorUnlocked()
                     showLockdownDialog = true
                 }
             )
@@ -197,7 +225,36 @@ class MainActivity : ComponentActivity() {
                 isKioskEnabled = isKioskEnabled,
                 onEnterKiosk = onEnterKiosk,
                 onExitKiosk = onExitKiosk,
+                onRemoveOwner = {
+                    showLockdownDialog = false
+                    showRemoveConfirm = true
+                },
                 onDismiss = { showLockdownDialog = false },
+            )
+        }
+
+        if (showRemoveConfirm) {
+            AlertDialog(
+                onDismissRequest = { showRemoveConfirm = false },
+                containerColor = GraphiteSurface,
+                title = { Text("Remove Device Owner?", color = TextPrimary) },
+                text = {
+                    Text(
+                        "Kiosk mode is switched off permanently and the PPNAM Launcher gives up " +
+                            "control of this scanner, so the apps can be uninstalled. Putting it " +
+                            "back into service requires provisioning it again.",
+                        color = TextMuted
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        showRemoveConfirm = false
+                        onRemoveOwner()
+                    }) { Text("Remove", color = DangerRed) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showRemoveConfirm = false }) { Text("Cancel") }
+                },
             )
         }
     }
@@ -310,6 +367,7 @@ class MainActivity : ComponentActivity() {
         isKioskEnabled: Boolean,
         onEnterKiosk: () -> Unit,
         onExitKiosk: () -> Unit,
+        onRemoveOwner: () -> Unit,
         onDismiss: () -> Unit,
     ) {
         AlertDialog(
@@ -336,6 +394,12 @@ class MainActivity : ComponentActivity() {
                             color = TextMuted
                         )
                     }
+                    if (LockdownPanel.offersRemoval(isDeviceOwner)) {
+                        Spacer(Modifier.height(12.dp))
+                        TextButton(onClick = onRemoveOwner) {
+                            Text("Remove Device Owner", color = DangerRed)
+                        }
+                    }
                 }
             },
             confirmButton = {
@@ -360,5 +424,6 @@ class MainActivity : ComponentActivity() {
         const val CORRECT_PIN = "079545"
         const val MAX_PIN_ATTEMPTS = 5
         const val PIN_LOCKOUT_MS = 30_000L
+        const val KEY_SUPERVISOR_UNLOCKED = "supervisor_unlocked"
     }
 }

@@ -179,4 +179,31 @@ object KioskManager {
             Log.e(TAG, "Releasing kiosk policies failed", e)
         }
     }
+
+    /**
+     * Supervisor action: give up device ownership so the launcher (and every station app)
+     * can be uninstalled and the device re-provisioned or handed back as a normal handheld.
+     * Undoes everything [applyPolicies] set first — including the user restrictions, which
+     * would otherwise keep blocking the factory reset — then clears ownership itself.
+     */
+    fun removeDeviceOwner(activity: Activity): Boolean {
+        exitKiosk(activity)
+        val dpm = dpm(activity)
+        val admin = admin(activity)
+        return try {
+            LOCKDOWN_RESTRICTIONS.forEach { dpm.clearUserRestriction(admin, it) }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                dpm.setLockTaskFeatures(admin, DevicePolicyManager.LOCK_TASK_FEATURE_NONE)
+            }
+            @Suppress("DEPRECATION")
+            dpm.clearDeviceOwnerApp(activity.packageName)
+            // Next provisioning should start locked, not inherit this supervisor's opt-out.
+            setEnabled(activity, true)
+            Log.w(TAG, "Device owner removed by supervisor")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Removing device owner failed", e)
+            false
+        }
+    }
 }
