@@ -13,13 +13,26 @@ import org.junit.Test
 class PinGateTest {
 
     private var now = 1_000_000L
-    private val store = PinGate.MemoryStore()
-    private val gate = PinGate(store, clock = { now })
+    private val store = FlakyStore()
+    private val gate = PinGate(store, correctPin = PIN, clock = { now })
+
+    /** In-memory store whose reads can be made to throw, like a corrupted preference. */
+    private class FlakyStore : PinGate.Store {
+        var readsFail = false
+        private var failed = 0
+        private var until = 0L
+        override var failedAttempts: Int
+            get() = if (readsFail) throw IllegalStateException("read failed") else failed
+            set(value) { failed = value }
+        override var lockedOutUntilMs: Long
+            get() = if (readsFail) throw IllegalStateException("read failed") else until
+            set(value) { until = value }
+    }
 
     @Test
     fun `correct PIN unlocks and clears the failure count`() {
         store.failedAttempts = 3
-        assertEquals(PinGate.Result.Unlocked, gate.submit("079545"))
+        assertEquals(PinGate.Result.Unlocked, gate.submit(PIN))
         assertEquals(0, store.failedAttempts)
         assertEquals(0L, store.lockedOutUntilMs)
     }
@@ -55,7 +68,7 @@ class PinGateTest {
     fun `correct PIN during lockout is refused and the countdown keeps running`() {
         repeat(5) { gate.submit("000000") }
         now += 3_000
-        assertEquals(PinGate.Result.LockedOut(27), gate.submit("079545"))
+        assertEquals(PinGate.Result.LockedOut(27), gate.submit(PIN))
         assertEquals(27L, gate.lockoutSecondsLeft())
     }
 
@@ -63,16 +76,16 @@ class PinGateTest {
     @Test
     fun `lockout survives a new gate on the same store`() {
         repeat(5) { gate.submit("000000") }
-        val reopened = PinGate(store, clock = { now })
+        val reopened = PinGate(store, correctPin = PIN, clock = { now })
         assertTrue(reopened.isLockedOut())
-        assertEquals(PinGate.Result.LockedOut(30), reopened.submit("079545"))
+        assertEquals(PinGate.Result.LockedOut(30), reopened.submit(PIN))
     }
 
     @Test
     fun `failure count survives a new gate on the same store`() {
         gate.submit("000000")
         gate.submit("000000")
-        val reopened = PinGate(store, clock = { now })
+        val reopened = PinGate(store, correctPin = PIN, clock = { now })
         assertEquals(PinGate.Result.Wrong(2), reopened.submit("000000"))
     }
 
@@ -96,13 +109,63 @@ class PinGateTest {
         assertEquals(1L, gate.lockoutSecondsLeft())
     }
 
-    /** Review Focus 1: a clock set backwards must not extend the lockout past 30 s. */
+    /**
+     * Security review "fail-open-state-drift": a clock set backwards leaves the deadline
+     * further away than one lockout. The gate stays closed until the clock catches up
+     * rather than opening early (the plan's original "treat as expired" was fail-open).
+     */
     @Test
-    fun `lockout further away than its own duration is treated as expired`() {
-        store.lockedOutUntilMs = now + PinGate.LOCKOUT_MS + 1
-        assertFalse(gate.isLockedOut())
-        assertEquals(0L, gate.lockoutSecondsLeft())
+    fun `lockout further away than its own duration stays locked`() {
+        store.lockedOutUntilMs = now + PinGate.LOCKOUT_MS + 60_000
+        assertTrue(gate.isLockedOut())
+        assertEquals(90L, gate.lockoutSecondsLeft())
+        assertEquals(PinGate.Result.LockedOut(90), gate.submit(PIN))
+        assertEquals(PinGate.Result.LockedOut(90), gate.submit("000000"))
+    }
+
+    /** A store that cannot be read must not hand back a fresh, zeroed attempt budget. */
+    @Test
+    fun `store read failure keeps the last known attempt count`() {
+        gate.submit("000000")
+        gate.submit("000000")
+        store.readsFail = true
+        assertEquals(PinGate.Result.Wrong(2), gate.submit("000000"))
+        assertEquals(PinGate.Result.Wrong(1), gate.submit("000000"))
+        assertEquals(PinGate.Result.LockedOut(30), gate.submit("000000"))
+    }
+
+    @Test
+    fun `store read failure keeps the last known lockout`() {
+        repeat(5) { gate.submit("000000") }
+        store.readsFail = true
+        now += 5_000
+        assertTrue(gate.isLockedOut())
+        assertEquals(25L, gate.lockoutSecondsLeft())
+        assertEquals(PinGate.Result.LockedOut(25), gate.submit(PIN))
+    }
+
+    /** No value ever read: fail closed (one attempt, then lockout) but never lock out the PIN itself. */
+    @Test
+    fun `store read failure before any read fails closed`() {
+        store.readsFail = true
+        assertEquals(PinGate.Result.LockedOut(30), gate.submit("000000"))
+        now += PinGate.LOCKOUT_MS
+        assertEquals(PinGate.Result.Unlocked, gate.submit(PIN))
+    }
+
+    @Test
+    fun `store write failure keeps the in-memory count authoritative`() {
+        val store = object : PinGate.Store {
+            override var failedAttempts: Int
+                get() = 0
+                set(_) { throw IllegalStateException("write failed") }
+            override var lockedOutUntilMs: Long
+                get() = 0L
+                set(_) { throw IllegalStateException("write failed") }
+        }
+        val gate = PinGate(store, correctPin = PIN, clock = { now })
         assertEquals(PinGate.Result.Wrong(4), gate.submit("000000"))
+        assertEquals(PinGate.Result.Wrong(3), gate.submit("000000"))
     }
 
     /** Review Focus 2 / launcher-03: the field only ever holds up to six digits. */
@@ -112,5 +175,9 @@ class PinGateTest {
         assertEquals("079545", PinGate.sanitize("0795456789"))
         assertEquals("123", PinGate.sanitize("1 2-3\n"))
         assertEquals("", PinGate.sanitize(""))
+    }
+
+    private companion object {
+        const val PIN = "079545"
     }
 }
