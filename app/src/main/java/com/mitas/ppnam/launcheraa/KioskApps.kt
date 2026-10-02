@@ -40,6 +40,14 @@ object KioskApps {
     fun visibleEntries(supervisorUnlocked: Boolean): List<Entry> =
         entries.filter { supervisorUnlocked || !it.supervisorOnly }
 
+    /**
+     * Whether a tile is drawn at all. A station app that is missing is a provisioning
+     * fault the operator should see ("Not installed"); a missing supervisor-only app is
+     * just a device without that service, and an inert tile would only confuse.
+     */
+    fun showsTile(entry: Entry, installed: Boolean): Boolean =
+        installed || !entry.supervisorOnly
+
     /** Everything allowed to run while pinned. Not every package has to be installed —
      *  the DPM accepts absent packages, which keeps one build valid for every handheld. */
     fun lockTaskPackages(ownPackage: String): Array<String> =

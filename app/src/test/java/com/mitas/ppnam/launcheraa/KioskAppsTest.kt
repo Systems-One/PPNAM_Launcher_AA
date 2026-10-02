@@ -78,4 +78,15 @@ class KioskAppsTest {
         val packages = KioskApps.lockTaskPackages("com.mitas.ppnam.launcheraa").toList()
         assertEquals(packages.size, packages.distinct().size)
     }
+
+    /** launcher-09: a dead "Not installed" supervisor tile tells a supervisor nothing. */
+    @Test
+    fun `absent supervisor-only apps are hidden, absent station apps stay visible`() {
+        val keyboardEmulator = KioskApps.entries.first { it.packageName == "com.rscja.scanner" }
+        val station3 = KioskApps.entries.first { it.packageName == "com.mitas.ppnam.station3aa" }
+        assertFalse(KioskApps.showsTile(keyboardEmulator, installed = false))
+        assertTrue(KioskApps.showsTile(keyboardEmulator, installed = true))
+        assertTrue(KioskApps.showsTile(station3, installed = false))
+        assertTrue(KioskApps.showsTile(station3, installed = true))
+    }
 }

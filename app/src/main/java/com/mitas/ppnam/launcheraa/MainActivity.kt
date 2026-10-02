@@ -30,6 +30,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -66,6 +67,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
@@ -158,7 +160,9 @@ class MainActivity : ComponentActivity() {
             LauncherTheme {
                 val visible = KioskApps.visibleEntries(supervisorUnlocked.value)
                 LauncherScreen(
-                    tiles = tiles.value.filter { it.entry in visible },
+                    tiles = tiles.value.filter {
+                        it.entry in visible && KioskApps.showsTile(it.entry, it.installed)
+                    },
                     onLaunch = { KioskApps.launch(this, it) },
                     onSupervisorUnlocked = { supervisorUnlocked.value = true },
                     pinGate = pinGate,
@@ -334,16 +338,23 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Fixed-height tile so a two-line label or a "Not installed" line never makes one row
+     * taller than its neighbours (UI audit launcher-08); a missing icon gets a warning
+     * glyph instead of a blank square (launcher-09).
+     */
     @Composable
     private fun AppTile(tile: Tile, onLaunch: (KioskApps.Entry) -> Unit) {
         val alpha = if (tile.installed) 1f else 0.35f
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
             modifier = Modifier
+                .height(148.dp)
                 .clip(RoundedCornerShape(16.dp))
                 .background(GraphiteSurface)
                 .clickable(enabled = tile.installed) { onLaunch(tile.entry) }
-                .padding(vertical = 18.dp, horizontal = 8.dp)
+                .padding(vertical = 12.dp, horizontal = 8.dp)
         ) {
             if (tile.icon != null) {
                 Image(
@@ -356,25 +367,36 @@ class MainActivity : ComponentActivity() {
                 )
             } else {
                 Box(
+                    contentAlignment = Alignment.Center,
                     modifier = Modifier
                         .size(56.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .background(GraphiteBorder)
-                )
+                ) {
+                    Icon(
+                        Icons.Filled.Warning,
+                        contentDescription = null,
+                        tint = WarnAmber,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
             }
             Spacer(Modifier.height(10.dp))
             Text(
                 tile.entry.label,
                 style = MaterialTheme.typography.labelLarge,
                 color = if (tile.installed) TextPrimary else TextMuted,
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
             )
             if (!tile.installed) {
                 Text(
                     "Not installed",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = TextMuted,
-                    textAlign = TextAlign.Center
+                    style = MaterialTheme.typography.labelMedium,
+                    color = WarnAmber,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1
                 )
             }
         }
