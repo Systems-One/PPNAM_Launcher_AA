@@ -36,7 +36,9 @@
             android:label="@string/app_name"
             android:launchMode="singleTask"
             android:lockTaskMode="if_whitelisted"
-            android:theme="@style/Theme.PPNAMLauncher">
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.PPNAMLauncher"
+            android:windowSoftInputMode="stateHidden|adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

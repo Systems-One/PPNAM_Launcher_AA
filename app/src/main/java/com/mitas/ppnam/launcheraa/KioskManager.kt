@@ -7,7 +7,6 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.content.pm.ActivityInfo
 import android.os.Build
 import android.os.UserManager
 import android.util.Log
@@ -58,9 +57,8 @@ object KioskManager {
      * lockTaskMode="if_whitelisted" in the manifest; this is the belt to that braces.
      */
     fun ensurePinned(activity: Activity) {
-        // Applied on every resume, not just the one that pins: the activity can be
-        // recreated inside an already-pinned task and would otherwise come back rotatable.
-        applyOrientationLock(activity, locked = isDeviceOwner(activity) && isKioskEnabled(activity))
+        // Orientation is fixed to portrait in the manifest for every state of the device
+        // (UI audit launcher-02): a runtime requestedOrientation would override it.
         val shouldPin = KioskPolicy.shouldPin(
             isDeviceOwner = isDeviceOwner(activity),
             kioskEnabled = isKioskEnabled(activity),
@@ -79,7 +77,6 @@ object KioskManager {
     /** Supervisor action: release the device until kiosk is re-enabled. */
     fun exitKiosk(activity: Activity) {
         setEnabled(activity, false)
-        applyOrientationLock(activity, locked = false)
         releasePolicies(activity)
         if (isPinned(activity)) {
             try {
@@ -96,18 +93,6 @@ object KioskManager {
         setEnabled(activity, true)
         ensurePinned(activity)
         Log.w(TAG, "Kiosk enabled by supervisor")
-    }
-
-    /**
-     * Kiosk holds the launcher in portrait ("vertical"); unlocked, the device rotates
-     * normally so supervisors can use Settings and station apps however they like.
-     */
-    private fun applyOrientationLock(activity: Activity, locked: Boolean) {
-        activity.requestedOrientation = if (locked) {
-            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-        } else {
-            ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-        }
     }
 
     private fun setEnabled(context: Context, enabled: Boolean) {

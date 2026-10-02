@@ -66,9 +66,8 @@ class MainActivity : ComponentActivity() {
 
     /**
      * What the supervisor panel renders from. Observable and re-read on every resume and
-     * after every supervisor action: exitKiosk() releases the portrait lock, which
-     * recreates this activity, so a value read once at composition is stale by the time
-     * the panel redraws.
+     * after every supervisor action, so the panel always describes the device as it is
+     * now rather than as it was when the dialog opened.
      */
     private val deviceOwner = mutableStateOf(false)
     private val kioskEnabled = mutableStateOf(true)
@@ -150,9 +149,9 @@ class MainActivity : ComponentActivity() {
         onExitKiosk: () -> Unit,
         onRemoveOwner: () -> Unit,
     ) {
-        // rememberSaveable, not remember: exiting kiosk releases the orientation lock and
-        // recreates this activity. With plain remember the panel vanished mid-action and
-        // looked to the supervisor like the exit had silently failed.
+        // rememberSaveable, not remember: the dialog flags must survive any recreation of
+        // this activity (process death, a future configuration change) — with plain
+        // remember the panel once vanished mid-action and looked like a silent failure.
         var showPinDialog by rememberSaveable { mutableStateOf(false) }
         var showLockdownDialog by rememberSaveable { mutableStateOf(false) }
         var showRemoveConfirm by rememberSaveable { mutableStateOf(false) }
