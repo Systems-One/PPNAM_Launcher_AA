@@ -11,7 +11,8 @@ package com.mitas.ppnam.launcheraa
  * Fails closed: a store that cannot be read keeps the last value this gate saw (or, before
  * any read succeeded, a budget of one attempt), a store that cannot be written keeps the
  * in-memory value authoritative, and a deadline that sits further away than one lockout
- * (the clock moved backwards) stays locked until the clock catches up.
+ * (the clock moved backwards) is re-based to a full lockout from now — never shorter, never
+ * open-ended.
  */
 class PinGate(
     private val store: Store,
@@ -72,12 +73,23 @@ class PinGate(
     /** Whole seconds until the lockout ends, rounded up; 0 when not locked out. */
     fun lockoutSecondsLeft(): Long {
         val now = clock()
-        val until = lockedOutUntilMs
+        var until = lockedOutUntilMs
         if (now >= until) return 0
+        if (until - now > LOCKOUT_MS) {
+            // The deadline is further away than a lockout can be: the clock moved backwards
+            // or the RTC reset. Opening early would be fail-open; holding until the clock
+            // catches up could take years, with the clock fix (Settings) behind this very
+            // PIN. Re-impose one full lockout from now instead, and persist it.
+            until = now + LOCKOUT_MS
+            lockedOutUntilMs = until
+        }
         return (until - now + 999) / 1_000
     }
 
     fun isLockedOut(): Boolean = lockoutSecondsLeft() > 0
+
+    /** Attempts still available before the next lockout; [MAX_ATTEMPTS] on a clean slate. */
+    fun attemptsLeft(): Int = MAX_ATTEMPTS - failedAttempts
 
     fun submit(pin: String): Result {
         val secondsLeft = lockoutSecondsLeft()

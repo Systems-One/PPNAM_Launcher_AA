@@ -412,7 +412,14 @@ class MainActivity : ComponentActivity() {
     private fun SupervisorPinDialog(gate: PinGate, onDismiss: () -> Unit, onUnlocked: () -> Unit) {
         val resources = LocalContext.current.resources
         var pin by rememberSaveable { mutableStateOf("") }
-        var result by remember { mutableStateOf<PinGate.Result?>(null) }
+        // Seeded from the persisted counter so a dialog reopened at "1 attempt left" says so
+        // instead of presenting a clean field right before a lockout.
+        var result by remember {
+            val left = gate.attemptsLeft()
+            mutableStateOf<PinGate.Result?>(
+                if (left < PinGate.MAX_ATTEMPTS) PinGate.Result.Wrong(left) else null
+            )
+        }
         var lockedOutUntil by remember { mutableStateOf(gate.lockedOutUntilMs) }
         var secondsLeft by remember { mutableStateOf(gate.lockoutSecondsLeft()) }
         val lockedOut = secondsLeft > 0

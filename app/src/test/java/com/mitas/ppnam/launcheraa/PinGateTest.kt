@@ -110,17 +110,43 @@ class PinGateTest {
     }
 
     /**
-     * Security review "fail-open-state-drift": a clock set backwards leaves the deadline
-     * further away than one lockout. The gate stays closed until the clock catches up
-     * rather than opening early (the plan's original "treat as expired" was fail-open).
+     * Security review "fail-open-state-drift" + branch review: a deadline further away than
+     * one lockout means the clock moved backwards (or the RTC reset). The gate neither opens
+     * early (the plan's original "treat as expired") nor holds until the clock catches up
+     * (could be years, with the clock fix behind this very PIN): it re-imposes one full
+     * lockout from now and persists that deadline.
      */
     @Test
-    fun `lockout further away than its own duration stays locked`() {
+    fun `lockout further away than its own duration is rebased to a full lockout from now`() {
         store.lockedOutUntilMs = now + PinGate.LOCKOUT_MS + 60_000
         assertTrue(gate.isLockedOut())
-        assertEquals(90L, gate.lockoutSecondsLeft())
-        assertEquals(PinGate.Result.LockedOut(90), gate.submit(PIN))
-        assertEquals(PinGate.Result.LockedOut(90), gate.submit("000000"))
+        assertEquals(30L, gate.lockoutSecondsLeft())
+        assertEquals(now + PinGate.LOCKOUT_MS, store.lockedOutUntilMs)
+        assertEquals(PinGate.Result.LockedOut(30), gate.submit(PIN))
+        now += PinGate.LOCKOUT_MS
+        assertFalse(gate.isLockedOut())
+        assertEquals(PinGate.Result.Unlocked, gate.submit(PIN))
+    }
+
+    @Test
+    fun `clock jumping back mid-lockout never shortens the lockout`() {
+        repeat(5) { gate.submit("000000") }
+        now += 10_000
+        assertEquals(20L, gate.lockoutSecondsLeft())
+        now -= 3_600_000
+        assertEquals(30L, gate.lockoutSecondsLeft())
+        assertEquals(PinGate.Result.LockedOut(30), gate.submit(PIN))
+    }
+
+    /** Branch review: a reopened dialog must show the persisted count, not a clean slate. */
+    @Test
+    fun `attempts left reflects the persisted count for a reopened dialog`() {
+        assertEquals(5, gate.attemptsLeft())
+        gate.submit("000000")
+        gate.submit("000000")
+        assertEquals(3, PinGate(store, correctPin = PIN, clock = { now }).attemptsLeft())
+        gate.submit(PIN)
+        assertEquals(5, gate.attemptsLeft())
     }
 
     /** A store that cannot be read must not hand back a fresh, zeroed attempt budget. */
