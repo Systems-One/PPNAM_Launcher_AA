@@ -8,6 +8,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,9 +23,11 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
@@ -55,6 +58,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -448,15 +452,26 @@ class MainActivity : ComponentActivity() {
         AlertDialog(
             onDismissRequest = onDismiss,
             containerColor = GraphiteSurface,
-            title = { Text("Device Lockdown", color = TextPrimary) },
+            title = { Text(stringResource(R.string.lockdown_title), color = TextPrimary) },
             text = {
                 Column {
                     when {
-                        !isDeviceOwner -> Text(
-                            "This launcher is not the device owner. Provision it with:\n\n" +
-                                "dpm set-device-owner com.mitas.ppnam.launcheraa/.KioskDeviceAdminReceiver",
-                            color = TextMuted
-                        )
+                        !isDeviceOwner -> {
+                            Text(stringResource(R.string.lockdown_not_owner), color = TextMuted)
+                            Spacer(Modifier.height(12.dp))
+                            SelectionContainer {
+                                Text(
+                                    stringResource(R.string.lockdown_provision_command),
+                                    color = TextPrimary,
+                                    fontFamily = FontFamily.Monospace,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    softWrap = false,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .horizontalScroll(rememberScrollState())
+                                )
+                            }
+                        }
                         isKioskEnabled -> Text(
                             "Kiosk is active: the device is confined to the apps on this " +
                                 "launcher. Exiting frees Home, Recents and all other apps " +

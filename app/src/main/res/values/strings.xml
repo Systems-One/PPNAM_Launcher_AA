@@ -14,4 +14,11 @@
     </plurals>
     <string name="pin_unlock">Unlock</string>
     <string name="pin_cancel">Cancel</string>
+
+    <!-- Device Lockdown dialog, unprovisioned branch (UI audit launcher-07). The shell
+         command is for the provisioning PC, so it is shown on one monospace line the
+         supervisor can scroll and copy rather than wrapped into the prose. -->
+    <string name="lockdown_title">Device Lockdown</string>
+    <string name="lockdown_not_owner">This scanner has not been provisioned, so kiosk mode is not available. Run the PPNAM provisioning kit (PPNAM_Provisioning\\provision.ps1) from a PC with the scanner connected. It runs:</string>
+    <string name="lockdown_provision_command">dpm set-device-owner com.mitas.ppnam.launcheraa/.KioskDeviceAdminReceiver</string>
 </resources>
