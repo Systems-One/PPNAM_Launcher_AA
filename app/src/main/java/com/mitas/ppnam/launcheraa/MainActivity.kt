@@ -3,6 +3,7 @@ package com.mitas.ppnam.launcheraa
 import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.addCallback
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -100,6 +101,11 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         supervisorUnlocked.value = savedInstanceState?.getBoolean(KEY_SUPERVISOR_UNLOCKED) ?: false
         refreshKioskState()
+        // The launcher is the floor of the device: Back must never drop a supervisor into
+        // whatever app sat behind the task on an unprovisioned handheld (UI audit
+        // launcher-12). Under lock task the OS already blocks Back; this covers the rest.
+        // Compose dialogs run in their own window, so Back still closes an open dialog.
+        onBackPressedDispatcher.addCallback(this) { /* swallow */ }
         setContent {
             val visible = KioskApps.visibleEntries(supervisorUnlocked.value)
             LauncherScreen(
