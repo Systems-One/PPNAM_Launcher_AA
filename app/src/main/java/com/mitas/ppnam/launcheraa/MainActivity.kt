@@ -32,6 +32,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -40,6 +41,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -69,13 +71,55 @@ import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import kotlinx.coroutines.delay
 
+// Station graphite palette (Station 2 ui/theme/Color.kt, Station 1 colors.xml) so the
+// launcher and the apps it opens read as one family (UI audit static-21).
 private val GraphiteBackground = Color(0xFF07101A)
-private val GraphiteSurface = Color(0xFF0E1B29)
-private val GraphiteBorder = Color(0xFF1D2F42)
+private val GraphiteSurface = Color(0xFF102233)
+private val GraphiteBorder = Color(0xFF25384C)
 private val TextPrimary = Color(0xFFEDF4FB)
 private val TextMuted = Color(0xFF9BAEC0)
-private val DangerRed = Color(0xFFE5484D)
+private val DangerRed = Color(0xFFE25C5C)
 private val WarnAmber = Color(0xFFF0A13A)
+
+// Admin identity from the icon-pack README ("A — Teal"): field colour for filled
+// controls, light tint where an accent has to be legible as text or a 1 dp stroke on
+// graphite (#0F6E75 on #102233 is only 2.7:1).
+private val AdminTeal = Color(0xFF0F6E75)
+private val AdminTealTint = Color(0xFF9BCBCE)
+
+private val LauncherColorScheme = darkColorScheme(
+    primary = AdminTeal,
+    onPrimary = Color.White,
+    primaryContainer = AdminTeal,
+    onPrimaryContainer = Color.White,
+    secondary = AdminTealTint,
+    onSecondary = GraphiteBackground,
+    background = GraphiteBackground,
+    onBackground = TextPrimary,
+    surface = GraphiteSurface,
+    onSurface = TextPrimary,
+    surfaceVariant = GraphiteSurface,
+    onSurfaceVariant = TextMuted,
+    surfaceContainerHigh = GraphiteSurface,
+    error = DangerRed,
+    onError = TextPrimary,
+    outline = GraphiteBorder,
+)
+
+/** The only theme wrapper in the app; every dialog, button and field inherits it. */
+@Composable
+private fun LauncherTheme(content: @Composable () -> Unit) {
+    MaterialTheme(colorScheme = LauncherColorScheme, content = content)
+}
+
+/** Dismiss action: muted text, so the red destructive confirm is the only loud button. */
+@Composable
+private fun NeutralTextButton(onClick: () -> Unit, text: String) {
+    TextButton(
+        onClick = onClick,
+        colors = ButtonDefaults.textButtonColors(contentColor = TextMuted),
+    ) { Text(text) }
+}
 
 class MainActivity : ComponentActivity() {
 
@@ -111,27 +155,29 @@ class MainActivity : ComponentActivity() {
         // Compose dialogs run in their own window, so Back still closes an open dialog.
         onBackPressedDispatcher.addCallback(this) { /* swallow */ }
         setContent {
-            val visible = KioskApps.visibleEntries(supervisorUnlocked.value)
-            LauncherScreen(
-                tiles = tiles.value.filter { it.entry in visible },
-                onLaunch = { KioskApps.launch(this, it) },
-                onSupervisorUnlocked = { supervisorUnlocked.value = true },
-                pinGate = pinGate,
-                isDeviceOwner = deviceOwner.value,
-                isKioskEnabled = kioskEnabled.value,
-                onEnterKiosk = {
-                    KioskManager.enterKiosk(this)
-                    refreshKioskState()
-                },
-                onExitKiosk = {
-                    KioskManager.exitKiosk(this)
-                    refreshKioskState()
-                },
-                onRemoveOwner = {
-                    KioskManager.removeDeviceOwner(this)
-                    refreshKioskState()
-                },
-            )
+            LauncherTheme {
+                val visible = KioskApps.visibleEntries(supervisorUnlocked.value)
+                LauncherScreen(
+                    tiles = tiles.value.filter { it.entry in visible },
+                    onLaunch = { KioskApps.launch(this, it) },
+                    onSupervisorUnlocked = { supervisorUnlocked.value = true },
+                    pinGate = pinGate,
+                    isDeviceOwner = deviceOwner.value,
+                    isKioskEnabled = kioskEnabled.value,
+                    onEnterKiosk = {
+                        KioskManager.enterKiosk(this)
+                        refreshKioskState()
+                    },
+                    onExitKiosk = {
+                        KioskManager.exitKiosk(this)
+                        refreshKioskState()
+                    },
+                    onRemoveOwner = {
+                        KioskManager.removeDeviceOwner(this)
+                        refreshKioskState()
+                    },
+                )
+            }
         }
     }
 
@@ -282,7 +328,7 @@ class MainActivity : ComponentActivity() {
                     }) { Text("Remove", color = DangerRed) }
                 },
                 dismissButton = {
-                    TextButton(onClick = { showRemoveConfirm = false }) { Text("Cancel") }
+                    NeutralTextButton(onClick = { showRemoveConfirm = false }, text = "Cancel")
                 },
             )
         }
@@ -413,13 +459,13 @@ class MainActivity : ComponentActivity() {
                         unfocusedTextColor = TextPrimary,
                         disabledTextColor = TextMuted,
                         errorTextColor = TextPrimary,
-                        cursorColor = TextPrimary,
+                        cursorColor = AdminTealTint,
                         errorCursorColor = DangerRed,
-                        focusedBorderColor = TextPrimary,
+                        focusedBorderColor = AdminTealTint,
                         unfocusedBorderColor = GraphiteBorder,
                         disabledBorderColor = GraphiteBorder,
                         errorBorderColor = DangerRed,
-                        focusedLabelColor = TextPrimary,
+                        focusedLabelColor = AdminTealTint,
                         unfocusedLabelColor = TextMuted,
                         disabledLabelColor = TextMuted,
                         errorLabelColor = DangerRed,
@@ -435,7 +481,7 @@ class MainActivity : ComponentActivity() {
                 }
             },
             dismissButton = {
-                TextButton(onClick = onDismiss) { Text(stringResource(R.string.pin_cancel)) }
+                NeutralTextButton(onClick = onDismiss, text = stringResource(R.string.pin_cancel))
             },
         )
     }
@@ -505,7 +551,7 @@ class MainActivity : ComponentActivity() {
                     LockdownPanel.Action.NONE -> Unit
                 }
             },
-            dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+            dismissButton = { NeutralTextButton(onClick = onDismiss, text = "Close") },
         )
     }
 
