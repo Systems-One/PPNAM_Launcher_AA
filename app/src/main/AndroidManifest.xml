@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Device-wide portrait lock (KioskManager.applyRotationLock) writes the system rotation
+         settings. WRITE_SETTINGS is an app-op, not a runtime permission: device ownership does
+         not grant it (DevicePolicyManager.setSystemSetting refuses rotation outright), so
+         provisioning grants it once with `appops set <pkg> WRITE_SETTINGS allow`. -->
+    <uses-permission android:name="android.permission.WRITE_SETTINGS" />
+
     <!-- Android 11+ package visibility: without these queries the launcher cannot see the
          station apps at all — getLaunchIntentForPackage returns null and every tile shows
          "Not installed" with no icon. The MAIN intent query covers launchable apps broadly;

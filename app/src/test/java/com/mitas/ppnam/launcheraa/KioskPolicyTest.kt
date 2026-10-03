@@ -38,14 +38,14 @@ class KioskRotationPolicyTest {
     @Test
     fun `kiosk on locks the device to portrait and disables auto-rotate`() {
         val settings = KioskPolicy.rotationSettings(lockPortrait = true)
-        assertEquals("0", settings[KioskPolicy.SETTING_ACCELEROMETER_ROTATION])
-        assertEquals("0", settings[KioskPolicy.SETTING_USER_ROTATION])
+        assertEquals(0, settings[KioskPolicy.SETTING_ACCELEROMETER_ROTATION])
+        assertEquals(0, settings[KioskPolicy.SETTING_USER_ROTATION])
     }
 
     @Test
     fun `kiosk off restores auto-rotate and leaves the user rotation alone`() {
         val settings = KioskPolicy.rotationSettings(lockPortrait = false)
-        assertEquals("1", settings[KioskPolicy.SETTING_ACCELEROMETER_ROTATION])
+        assertEquals(1, settings[KioskPolicy.SETTING_ACCELEROMETER_ROTATION])
         assertFalse(settings.containsKey(KioskPolicy.SETTING_USER_ROTATION))
     }
 

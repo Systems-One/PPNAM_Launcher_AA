@@ -19,7 +19,7 @@ object KioskPolicy {
     const val SETTING_USER_ROTATION = "user_rotation"
 
     /**
-     * Device-wide rotation settings a device owner applies while kiosk is on or off.
+     * Device-wide rotation settings the launcher writes while kiosk is on or off.
      *
      * The launcher's own activity is already portrait in the manifest, but that does nothing
      * for the station apps or the system UI once an operator rotates the handheld. Locking
@@ -27,10 +27,10 @@ object KioskPolicy {
      * so every allowed app stays upright. Leaving kiosk restores auto-rotate; the fixed
      * rotation is left as-is because it only matters while auto-rotate is off.
      */
-    fun rotationSettings(lockPortrait: Boolean): Map<String, String> =
+    fun rotationSettings(lockPortrait: Boolean): Map<String, Int> =
         if (lockPortrait) {
-            mapOf(SETTING_ACCELEROMETER_ROTATION to "0", SETTING_USER_ROTATION to "0")
+            mapOf(SETTING_ACCELEROMETER_ROTATION to 0, SETTING_USER_ROTATION to 0)
         } else {
-            mapOf(SETTING_ACCELEROMETER_ROTATION to "1")
+            mapOf(SETTING_ACCELEROMETER_ROTATION to 1)
         }
 }

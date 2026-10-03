@@ -9,6 +9,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
 import android.os.UserManager
+import android.provider.Settings
 import android.util.Log
 
 /**
@@ -21,8 +22,8 @@ import android.util.Log
  * status bar shows only system info (wifi, battery, clock) and cannot be expanded;
  * Recents and every other app stay unavailable, and the whole device is held in portrait
  * (auto-rotate off, fixed rotation 0) so the station apps cannot be turned sideways either.
- * Supervisors toggle kiosk from the PIN-locked panel inside the launcher. Without device ownership every call here is a
- * no-op, so development installs behave normally.
+ * Supervisors toggle kiosk from the PIN-locked panel inside the launcher. Without device
+ * ownership every call here is a no-op, so development installs behave normally.
  */
 object KioskManager {
 
@@ -58,11 +59,17 @@ object KioskManager {
      * lockTaskMode="if_whitelisted" in the manifest; this is the belt to that braces.
      */
     fun ensurePinned(activity: Activity) {
+        val isDeviceOwner = isDeviceOwner(activity)
+        val kioskEnabled = isKioskEnabled(activity)
         // The launcher's own orientation is fixed to portrait in the manifest (UI audit
-        // launcher-02); the device-wide rotation lock is a kiosk policy, see applyPolicies.
+        // launcher-02). The device-wide lock is re-asserted on every resume, not only when
+        // (re)pinning: a provisioned device boots already pinned via lockTaskMode=
+        // "if_whitelisted", and an app update relaunches into a still-locked task, so the
+        // applyPolicies path below would otherwise never run on an upgraded device.
+        if (isDeviceOwner && kioskEnabled) applyRotationLock(activity, lockPortrait = true)
         val shouldPin = KioskPolicy.shouldPin(
-            isDeviceOwner = isDeviceOwner(activity),
-            kioskEnabled = isKioskEnabled(activity),
+            isDeviceOwner = isDeviceOwner,
+            kioskEnabled = kioskEnabled,
             alreadyPinned = isPinned(activity),
         )
         if (!shouldPin) return
@@ -149,25 +156,37 @@ object KioskManager {
     }
 
     /**
-     * Device-wide portrait lock. Only a device owner may write system settings on behalf of
-     * the user (API 28+); the manifest's screenOrientation covers the launcher itself on
-     * older builds, but the station apps would still rotate there.
+     * Device-wide portrait lock: auto-rotate off and the fixed rotation parked at portrait, so
+     * the station apps and the system UI cannot be turned sideways either.
+     *
+     * Written through Settings.System under WRITE_SETTINGS. Device ownership is no help here:
+     * DevicePolicyManager.setSystemSetting only allows the screen-brightness/timeout settings
+     * and refuses rotation ("device owners cannot update accelerometer_rotation"), and
+     * WRITE_SETTINGS is an app-op a device owner cannot grant itself. Provisioning grants it
+     * (`appops set <pkg> WRITE_SETTINGS allow`); without it this logs and leaves rotation alone.
      */
     private fun applyRotationLock(context: Context, lockPortrait: Boolean) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
-            Log.w(TAG, "Device-wide rotation lock needs API 28+; skipped on ${Build.VERSION.SDK_INT}")
+        if (!Settings.System.canWrite(context)) {
+            Log.w(TAG, "WRITE_SETTINGS not granted; device rotation left as-is (re-run provisioning)")
             return
         }
-        val dpm = dpm(context)
-        val admin = admin(context)
+        val resolver = context.contentResolver
+        var changed = false
+        var ok = true
         KioskPolicy.rotationSettings(lockPortrait).forEach { (setting, value) ->
             try {
-                dpm.setSystemSetting(admin, setting, value)
+                // Idempotent: called on every resume, so only touch a setting that differs.
+                if (Settings.System.getInt(resolver, setting, -1) == value) return@forEach
+                changed = true
+                if (!Settings.System.putInt(resolver, setting, value)) ok = false
             } catch (e: Exception) {
-                Log.e(TAG, "setSystemSetting($setting=$value) failed", e)
+                ok = false
+                Log.e(TAG, "Writing $setting=$value failed", e)
             }
         }
-        Log.i(TAG, if (lockPortrait) "Device rotation locked to portrait" else "Device auto-rotate restored")
+        if (changed && ok) {
+            Log.i(TAG, if (lockPortrait) "Device rotation locked to portrait" else "Device auto-rotate restored")
+        }
     }
 
     private fun releasePolicies(context: Context) {
