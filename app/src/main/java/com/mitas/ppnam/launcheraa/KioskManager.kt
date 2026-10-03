@@ -7,7 +7,6 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.content.pm.ActivityInfo
 import android.os.Build
 import android.os.UserManager
 import android.util.Log
@@ -58,9 +57,8 @@ object KioskManager {
      * lockTaskMode="if_whitelisted" in the manifest; this is the belt to that braces.
      */
     fun ensurePinned(activity: Activity) {
-        // Applied on every resume, not just the one that pins: the activity can be
-        // recreated inside an already-pinned task and would otherwise come back rotatable.
-        applyOrientationLock(activity, locked = isDeviceOwner(activity) && isKioskEnabled(activity))
+        // Orientation is fixed to portrait in the manifest for every state of the device
+        // (UI audit launcher-02): a runtime requestedOrientation would override it.
         val shouldPin = KioskPolicy.shouldPin(
             isDeviceOwner = isDeviceOwner(activity),
             kioskEnabled = isKioskEnabled(activity),
@@ -79,7 +77,6 @@ object KioskManager {
     /** Supervisor action: release the device until kiosk is re-enabled. */
     fun exitKiosk(activity: Activity) {
         setEnabled(activity, false)
-        applyOrientationLock(activity, locked = false)
         releasePolicies(activity)
         if (isPinned(activity)) {
             try {
@@ -96,18 +93,6 @@ object KioskManager {
         setEnabled(activity, true)
         ensurePinned(activity)
         Log.w(TAG, "Kiosk enabled by supervisor")
-    }
-
-    /**
-     * Kiosk holds the launcher in portrait ("vertical"); unlocked, the device rotates
-     * normally so supervisors can use Settings and station apps however they like.
-     */
-    private fun applyOrientationLock(activity: Activity, locked: Boolean) {
-        activity.requestedOrientation = if (locked) {
-            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-        } else {
-            ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-        }
     }
 
     private fun setEnabled(context: Context, enabled: Boolean) {
@@ -177,6 +162,33 @@ object KioskManager {
             // reset, side-loading) that a supervisor has no legitimate use for either.
         } catch (e: Exception) {
             Log.e(TAG, "Releasing kiosk policies failed", e)
+        }
+    }
+
+    /**
+     * Supervisor action: give up device ownership so the launcher (and every station app)
+     * can be uninstalled and the device re-provisioned or handed back as a normal handheld.
+     * Undoes everything [applyPolicies] set first — including the user restrictions, which
+     * would otherwise keep blocking the factory reset — then clears ownership itself.
+     */
+    fun removeDeviceOwner(activity: Activity): Boolean {
+        exitKiosk(activity)
+        val dpm = dpm(activity)
+        val admin = admin(activity)
+        return try {
+            LOCKDOWN_RESTRICTIONS.forEach { dpm.clearUserRestriction(admin, it) }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                dpm.setLockTaskFeatures(admin, DevicePolicyManager.LOCK_TASK_FEATURE_NONE)
+            }
+            @Suppress("DEPRECATION")
+            dpm.clearDeviceOwnerApp(activity.packageName)
+            // Next provisioning should start locked, not inherit this supervisor's opt-out.
+            setEnabled(activity, true)
+            Log.w(TAG, "Device owner removed by supervisor")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Removing device owner failed", e)
+            false
         }
     }
 }

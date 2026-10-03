@@ -17,12 +17,10 @@ object KioskApps {
 
     private const val TAG = "KioskApps"
 
-    data class Entry(val label: String, val packageName: String)
+    /** [supervisorOnly] tiles stay off the grid until the supervisor PIN is entered. */
+    data class Entry(val label: String, val packageName: String, val supervisorOnly: Boolean = false)
 
     const val ANDROID_SETTINGS_PACKAGE = "com.android.settings"
-
-    /** Chainway InfoWedge: configures the barcode keyboard-wedge / broadcast output. */
-    private const val KEYBOARD_WEDGE_PACKAGE = "com.rscja.infowedge"
 
     /** Chainway's scan-service app, labelled "keyboardemulator" on the device (v12.x). */
     private const val KEYBOARD_EMULATOR_PACKAGE = "com.rscja.scanner"
@@ -33,10 +31,22 @@ object KioskApps {
         Entry("Station 3", "com.mitas.ppnam.station3aa"),
         Entry("Station 4", "com.mitas.ppnam.station4aa"),
         Entry("Station 5", "com.mitas.ppnam.station5aa"),
-        Entry("Keyboard Wedge", KEYBOARD_WEDGE_PACKAGE),
-        Entry("Keyboard Emulator", KEYBOARD_EMULATOR_PACKAGE),
-        Entry("Settings", ANDROID_SETTINGS_PACKAGE),
+        Entry("Keyboard Emulator", KEYBOARD_EMULATOR_PACKAGE, supervisorOnly = true),
+        Entry("Settings", ANDROID_SETTINGS_PACKAGE, supervisorOnly = true),
     )
+
+    /** The tiles to show. Hidden entries stay in [lockTaskPackages] so a supervisor can
+     *  still launch them while the device is pinned. */
+    fun visibleEntries(supervisorUnlocked: Boolean): List<Entry> =
+        entries.filter { supervisorUnlocked || !it.supervisorOnly }
+
+    /**
+     * Whether a tile is drawn at all. A station app that is missing is a provisioning
+     * fault the operator should see ("Not installed"); a missing supervisor-only app is
+     * just a device without that service, and an inert tile would only confuse.
+     */
+    fun showsTile(entry: Entry, installed: Boolean): Boolean =
+        installed || !entry.supervisorOnly
 
     /** Everything allowed to run while pinned. Not every package has to be installed —
      *  the DPM accepts absent packages, which keeps one build valid for every handheld. */
