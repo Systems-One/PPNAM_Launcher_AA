@@ -19,8 +19,9 @@ import android.util.Log
  * launcher as the forced HOME activity: the device boots straight into the launcher grid,
  * and the Home button — or backing out of any allowed app — always returns to it. The
  * status bar shows only system info (wifi, battery, clock) and cannot be expanded;
- * Recents and every other app stay unavailable, and the launcher is held in portrait. Supervisors toggle kiosk from the
- * PIN-locked panel inside the launcher. Without device ownership every call here is a
+ * Recents and every other app stay unavailable, and the whole device is held in portrait
+ * (auto-rotate off, fixed rotation 0) so the station apps cannot be turned sideways either.
+ * Supervisors toggle kiosk from the PIN-locked panel inside the launcher. Without device ownership every call here is a
  * no-op, so development installs behave normally.
  */
 object KioskManager {
@@ -57,8 +58,8 @@ object KioskManager {
      * lockTaskMode="if_whitelisted" in the manifest; this is the belt to that braces.
      */
     fun ensurePinned(activity: Activity) {
-        // Orientation is fixed to portrait in the manifest for every state of the device
-        // (UI audit launcher-02): a runtime requestedOrientation would override it.
+        // The launcher's own orientation is fixed to portrait in the manifest (UI audit
+        // launcher-02); the device-wide rotation lock is a kiosk policy, see applyPolicies.
         val shouldPin = KioskPolicy.shouldPin(
             isDeviceOwner = isDeviceOwner(activity),
             kioskEnabled = isKioskEnabled(activity),
@@ -141,9 +142,32 @@ object KioskManager {
             dpm.addPersistentPreferredActivity(
                 admin, homeFilter, ComponentName(context, MainActivity::class.java),
             )
+            applyRotationLock(context, lockPortrait = true)
         } catch (e: Exception) {
             Log.e(TAG, "Applying kiosk policies failed", e)
         }
+    }
+
+    /**
+     * Device-wide portrait lock. Only a device owner may write system settings on behalf of
+     * the user (API 28+); the manifest's screenOrientation covers the launcher itself on
+     * older builds, but the station apps would still rotate there.
+     */
+    private fun applyRotationLock(context: Context, lockPortrait: Boolean) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+            Log.w(TAG, "Device-wide rotation lock needs API 28+; skipped on ${Build.VERSION.SDK_INT}")
+            return
+        }
+        val dpm = dpm(context)
+        val admin = admin(context)
+        KioskPolicy.rotationSettings(lockPortrait).forEach { (setting, value) ->
+            try {
+                dpm.setSystemSetting(admin, setting, value)
+            } catch (e: Exception) {
+                Log.e(TAG, "setSystemSetting($setting=$value) failed", e)
+            }
+        }
+        Log.i(TAG, if (lockPortrait) "Device rotation locked to portrait" else "Device auto-rotate restored")
     }
 
     private fun releasePolicies(context: Context) {
@@ -158,6 +182,7 @@ object KioskManager {
             // even though a supervisor turned kiosk off.
             dpm.setLockTaskPackages(admin, emptyArray())
             dpm.setKeyguardDisabled(admin, false)
+            applyRotationLock(context, lockPortrait = false)
             // The user restrictions stay: they only block escapes (safe boot, factory
             // reset, side-loading) that a supervisor has no legitimate use for either.
         } catch (e: Exception) {
