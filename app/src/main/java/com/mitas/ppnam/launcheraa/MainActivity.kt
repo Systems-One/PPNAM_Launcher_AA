@@ -257,7 +257,7 @@ class MainActivity : ComponentActivity() {
                             color = TextPrimary
                         )
                         Text(
-                            "Station Launcher",
+                            "Station Launcher · v${BuildConfig.VERSION_NAME}",
                             style = MaterialTheme.typography.bodyMedium,
                             color = TextMuted
                         )
