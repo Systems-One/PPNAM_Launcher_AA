@@ -66,6 +66,34 @@ object KioskApps {
             .distinct()
             .toTypedArray()
 
+    /** The line under a tile's label. [label] is a space for READY so every tile keeps
+     *  the same height and its icon lines up with its neighbours'. */
+    enum class TileStatus(val label: String) {
+        READY(" "),
+        SUPERVISOR("Supervisor"),
+        DISABLED("Disabled"),
+        NOT_INSTALLED("Not installed"),
+    }
+
+    /**
+     * [launchable]: the app can be opened now. [present]: its package is on the device,
+     * enabled or not. A present but unlaunchable app is disabled; calling it "Not
+     * installed" sent supervisors to reinstall it (skill critique 2026-11-06 P3-5).
+     */
+    fun tileStatus(entry: Entry, launchable: Boolean, present: Boolean): TileStatus = when {
+        launchable -> if (entry.supervisorOnly) TileStatus.SUPERVISOR else TileStatus.READY
+        present -> TileStatus.DISABLED
+        else -> TileStatus.NOT_INSTALLED
+    }
+
+    /** Whether the package is on the device at all, including when it is disabled. */
+    fun isPresent(context: Context, entry: Entry): Boolean = try {
+        context.packageManager.getApplicationInfo(entry.packageName, 0)
+        true
+    } catch (e: Exception) {
+        false
+    }
+
     fun isInstalled(context: Context, entry: Entry): Boolean =
         entry.packageName == ANDROID_SETTINGS_PACKAGE ||
             context.packageManager.getLaunchIntentForPackage(entry.packageName) != null

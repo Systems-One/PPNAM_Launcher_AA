@@ -6,7 +6,7 @@
          PIN gate on the handheld reads the same (UI audit static-21). -->
     <string name="pin_dialog_title">Supervisor PIN</string>
     <string name="pin_label">PIN</string>
-    <string name="pin_blank">Enter the PIN</string>
+    <string name="pin_blank">Enter the 6-digit PIN</string>
     <string name="pin_locked_out">Too many attempts. Try again in %1$ds.</string>
     <plurals name="pin_attempts_left">
         <item quantity="one">Incorrect PIN. %1$d attempt left before lockout.</item>
