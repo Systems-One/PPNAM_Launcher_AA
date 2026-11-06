@@ -117,4 +117,39 @@ class KioskAppsTest {
             assertEquals(it.packageName, null, it.badge)
         }
     }
+
+    // Skill critique 2026-11-06 P3-5: a station app that is on the device but disabled
+    // was labelled "Not installed", which sends the supervisor to reinstall it instead of
+    // re-enabling it in Settings.
+
+    private val station = KioskApps.entries.first { !it.supervisorOnly }
+    private val tool = KioskApps.entries.first { it.supervisorOnly }
+
+    @Test
+    fun `a launchable station has no status line`() {
+        assertEquals(KioskApps.TileStatus.READY, KioskApps.tileStatus(station, launchable = true, present = true))
+    }
+
+    @Test
+    fun `a station that is present but not launchable is disabled, not missing`() {
+        assertEquals(KioskApps.TileStatus.DISABLED, KioskApps.tileStatus(station, launchable = false, present = true))
+    }
+
+    @Test
+    fun `a station that is absent is not installed`() {
+        assertEquals(KioskApps.TileStatus.NOT_INSTALLED, KioskApps.tileStatus(station, launchable = false, present = false))
+    }
+
+    @Test
+    fun `a launchable supervisor tool is tagged supervisor`() {
+        assertEquals(KioskApps.TileStatus.SUPERVISOR, KioskApps.tileStatus(tool, launchable = true, present = true))
+    }
+
+    @Test
+    fun `each status has the wording the tile shows`() {
+        assertEquals(" ", KioskApps.TileStatus.READY.label)
+        assertEquals("Supervisor", KioskApps.TileStatus.SUPERVISOR.label)
+        assertEquals("Disabled", KioskApps.TileStatus.DISABLED.label)
+        assertEquals("Not installed", KioskApps.TileStatus.NOT_INSTALLED.label)
+    }
 }

@@ -84,8 +84,9 @@ private val GraphiteBackground = Color(0xFF07101A)
 private val GraphiteSurface = Color(0xFF102233)
 private val GraphiteBorder = Color(0xFF25384C)
 // Visual critique 2026-11-06 P2-2: GraphiteBorder is 1.35:1 on GraphiteSurface, so the
-// unfocused PIN field had no visible edge. This mid tone is 3.3:1 (WCAG non-text 3:1).
-private val FieldOutline = Color(0xFF5E7389)
+// unfocused PIN field had no visible edge. Skill critique 2026-11-06 P2-2: now the suite's
+// `field_stroke` (CONSISTENCY.md C1, 4.85:1) instead of a launcher-only #5E7389.
+private val FieldOutline = Color(0xFF7A8FA5)
 private val TextPrimary = Color(0xFFEDF4FB)
 private val TextMuted = Color(0xFF9BAEC0)
 private val DangerRed = Color(0xFFE25C5C)
@@ -122,18 +123,27 @@ private fun LauncherTheme(content: @Composable () -> Unit) {
     MaterialTheme(colorScheme = LauncherColorScheme, content = content)
 }
 
-/** Dismiss action: muted text, so the red destructive confirm is the only loud button. */
+/** Dismiss action in plain text_primary, as in every station app (CONSISTENCY.md C6;
+ *  skill critique 2026-11-06 P2-1): only the destructive or primary action is coloured. */
 @Composable
 private fun NeutralTextButton(onClick: () -> Unit, text: String) {
     TextButton(
         onClick = onClick,
-        colors = ButtonDefaults.textButtonColors(contentColor = TextMuted),
+        colors = ButtonDefaults.textButtonColors(contentColor = TextPrimary),
     ) { Text(text) }
 }
 
+/** Suite button corner (CONSISTENCY.md C7; skill critique 2026-11-06 P2-3), not the M3 pill. */
+private val SuiteButtonShape = RoundedCornerShape(14.dp)
+
 class MainActivity : ComponentActivity() {
 
-    private data class Tile(val entry: KioskApps.Entry, val icon: ImageBitmap?, val installed: Boolean)
+    private data class Tile(
+        val entry: KioskApps.Entry,
+        val icon: ImageBitmap?,
+        val installed: Boolean,
+        val status: KioskApps.TileStatus,
+    )
 
     private val tiles = mutableStateOf<List<Tile>>(emptyList())
 
@@ -205,7 +215,8 @@ class MainActivity : ComponentActivity() {
             } catch (e: Exception) {
                 null
             }
-            Tile(entry, icon, installed)
+            val status = KioskApps.tileStatus(entry, installed, KioskApps.isPresent(this, entry))
+            Tile(entry, icon, installed, status)
         }
     }
 
@@ -443,11 +454,9 @@ class MainActivity : ComponentActivity() {
             // The same line tags the PIN-revealed tools, which otherwise mixed in with the
             // stations with nothing to say supervisor mode was on (P3-9).
             Text(
-                when {
-                    !tile.installed -> "Not installed"
-                    tile.entry.supervisorOnly -> "Supervisor"
-                    else -> " "
-                },
+                // "Disabled" when the package is there but switched off (skill critique
+                // 2026-11-06 P3-5); it used to say "Not installed".
+                tile.status.label,
                 style = MaterialTheme.typography.labelMedium,
                 color = if (tile.installed) AdminTealTint else WarnAmber,
                 textAlign = TextAlign.Center,
@@ -466,15 +475,22 @@ class MainActivity : ComponentActivity() {
     private fun MissingStationIcon(field: Color, badge: String) {
         Box(modifier = Modifier.size(56.dp)) {
             Box(
-                contentAlignment = Alignment.Center,
                 modifier = Modifier
                     .size(56.dp)
                     .alpha(0.45f)
                     .clip(CircleShape)
                     .background(field)
-            ) {
-                Text(badge, color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 26.sp)
-            }
+            )
+            // Numeral dimmed on its own: inside the 45% layer it fell to 2.7:1 on the amber
+            // disc. At 55% white it is 4.3:1 or better on every station colour (skill
+            // critique 2026-11-06 P3-6).
+            Text(
+                badge,
+                color = Color.White.copy(alpha = 0.55f),
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 26.sp,
+                modifier = Modifier.align(Alignment.Center),
+            )
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
@@ -589,7 +605,8 @@ class MainActivity : ComponentActivity() {
                         errorCursorColor = DangerRed,
                         focusedBorderColor = AdminTealTint,
                         unfocusedBorderColor = FieldOutline,
-                        disabledBorderColor = GraphiteBorder,
+                        // Suite rule C1: disabled stroke is the rest stroke at 38%.
+                        disabledBorderColor = FieldOutline.copy(alpha = 0.38f),
                         errorBorderColor = DangerRed,
                         focusedLabelColor = AdminTealTint,
                         unfocusedLabelColor = TextMuted,
@@ -602,7 +619,7 @@ class MainActivity : ComponentActivity() {
                 )
             },
             confirmButton = {
-                Button(onClick = { submit() }, enabled = !lockedOut) {
+                Button(onClick = { submit() }, enabled = !lockedOut, shape = SuiteButtonShape) {
                     Text(stringResource(R.string.pin_unlock))
                 }
             },
@@ -655,6 +672,21 @@ class MainActivity : ComponentActivity() {
                                             .padding(horizontal = 12.dp, vertical = 10.dp)
                                     )
                                 }
+                                // Left fade too once scrolled: the start used to stop mid-glyph
+                                // with nothing to say more text sits that way (skill critique
+                                // 2026-11-06 P3-7).
+                                if (commandScroll.value > 0) {
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.CenterStart)
+                                            .size(width = 32.dp, height = 36.dp)
+                                            .background(
+                                                Brush.horizontalGradient(
+                                                    listOf(GraphiteBackground, Color.Transparent)
+                                                )
+                                            )
+                                    )
+                                }
                                 if (commandScroll.value < commandScroll.maxValue) {
                                     Box(
                                         modifier = Modifier
@@ -704,7 +736,7 @@ class MainActivity : ComponentActivity() {
                     // red it read exactly like the irreversible Remove Device Owner beside it
                     // (visual critique 2026-11-06 P2-4).
                     LockdownPanel.Action.ENTER_KIOSK ->
-                        Button(onClick = onEnterKiosk) {
+                        Button(onClick = onEnterKiosk, shape = SuiteButtonShape) {
                             Text("Enter Kiosk Mode")
                         }
                     LockdownPanel.Action.NONE -> Unit
