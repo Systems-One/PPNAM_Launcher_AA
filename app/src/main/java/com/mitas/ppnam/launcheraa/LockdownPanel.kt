@@ -30,4 +30,17 @@ object LockdownPanel {
      * lockdown blocks the factory reset in Settings.
      */
     fun offersRemoval(isDeviceOwner: Boolean): Boolean = isDeviceOwner
+
+    /** What the home screen says about the lockdown, under the header. */
+    enum class HomeNotice { NONE, KIOSK_OFF, NOT_PROVISIONED }
+
+    /**
+     * Visual critique 2026-11-06 P1-1: an unlocked scanner used to look exactly like a
+     * locked one, so the state is now on the home screen itself, not only behind the PIN.
+     */
+    fun homeNotice(isDeviceOwner: Boolean, kioskEnabled: Boolean): HomeNotice = when {
+        !isDeviceOwner -> HomeNotice.NOT_PROVISIONED
+        !kioskEnabled -> HomeNotice.KIOSK_OFF
+        else -> HomeNotice.NONE
+    }
 }

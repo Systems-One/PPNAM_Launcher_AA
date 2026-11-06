@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Cold-start splash matches the composed background so boot into the locked
          launcher is seamless. -->
     <style name="Theme.PPNAMLauncher" parent="android:Theme.Material.NoActionBar">
@@ -8,5 +8,12 @@
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">false</item>
+        <!-- Visual critique 2026-11-06 P3-11: without this the system laid a lighter
+             contrast scrim (#10161F) over the graphite under the navigation buttons. -->
+        <item name="android:enforceNavigationBarContrast" tools:targetApi="29">false</item>
+        <!-- Visual critique 2026-11-06 P2-7: the icon foreground is matted on white, so on
+             the bare graphite splash it showed a white fringe. Put it back on white, as the
+             adaptive icon's own background layer does. -->
+        <item name="android:windowSplashScreenIconBackgroundColor" tools:targetApi="31">@color/ic_launcher_background</item>
     </style>
 </resources>

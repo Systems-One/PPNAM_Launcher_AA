@@ -17,8 +17,18 @@ object KioskApps {
 
     private const val TAG = "KioskApps"
 
-    /** [supervisorOnly] tiles stay off the grid until the supervisor PIN is entered. */
-    data class Entry(val label: String, val packageName: String, val supervisorOnly: Boolean = false)
+    /**
+     * [supervisorOnly] tiles stay off the grid until the supervisor PIN is entered.
+     * [fieldColor] (ARGB) and [badge] are the app's identity from the PPNAM icon pack, used
+     * to draw a placeholder when the app is missing (visual critique 2026-11-06 P2-5).
+     */
+    data class Entry(
+        val label: String,
+        val packageName: String,
+        val supervisorOnly: Boolean = false,
+        val fieldColor: Long? = null,
+        val badge: String? = null,
+    )
 
     const val ANDROID_SETTINGS_PACKAGE = "com.android.settings"
 
@@ -26,11 +36,12 @@ object KioskApps {
     private const val KEYBOARD_EMULATOR_PACKAGE = "com.rscja.scanner"
 
     val entries = listOf(
-        Entry("Station 1", "com.mitas.ppnam.station1aa"),
-        Entry("Station 2", "com.mitas.ppnam.station2aa"),
-        Entry("Station 3", "com.mitas.ppnam.station3aa"),
-        Entry("Station 4", "com.mitas.ppnam.station4aa"),
-        Entry("Station 5", "com.mitas.ppnam.station5aa"),
+        // Field colours: UI_Design/Android app logo directions/README.md.
+        Entry("Station 1", "com.mitas.ppnam.station1aa", fieldColor = 0xFF1B4DA0, badge = "1"),
+        Entry("Station 2", "com.mitas.ppnam.station2aa", fieldColor = 0xFF1D6B45, badge = "2"),
+        Entry("Station 3", "com.mitas.ppnam.station3aa", fieldColor = 0xFF7B1418, badge = "3"),
+        Entry("Station 4", "com.mitas.ppnam.station4aa", fieldColor = 0xFF55368C, badge = "4"),
+        Entry("Station 5", "com.mitas.ppnam.station5aa", fieldColor = 0xFFA85F14, badge = "5"),
         Entry("Keyboard Emulator", KEYBOARD_EMULATOR_PACKAGE, supervisorOnly = true),
         Entry("Settings", ANDROID_SETTINGS_PACKAGE, supervisorOnly = true),
     )

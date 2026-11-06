@@ -7,10 +7,12 @@ import androidx.activity.addCallback
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -24,6 +26,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -53,9 +56,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -78,6 +83,9 @@ import kotlinx.coroutines.delay
 private val GraphiteBackground = Color(0xFF07101A)
 private val GraphiteSurface = Color(0xFF102233)
 private val GraphiteBorder = Color(0xFF25384C)
+// Visual critique 2026-11-06 P2-2: GraphiteBorder is 1.35:1 on GraphiteSurface, so the
+// unfocused PIN field had no visible edge. This mid tone is 3.3:1 (WCAG non-text 3:1).
+private val FieldOutline = Color(0xFF5E7389)
 private val TextPrimary = Color(0xFFEDF4FB)
 private val TextMuted = Color(0xFF9BAEC0)
 private val DangerRed = Color(0xFFE25C5C)
@@ -228,6 +236,7 @@ class MainActivity : ComponentActivity() {
         onExitKiosk: () -> Unit,
         onRemoveOwner: () -> Unit,
     ) {
+        val notice = LockdownPanel.homeNotice(isDeviceOwner, isKioskEnabled)
         // rememberSaveable, not remember: the dialog flags must survive any recreation of
         // this activity (process death, a future configuration change) — with plain
         // remember the panel once vanished mid-action and looked like a silent failure.
@@ -269,6 +278,11 @@ class MainActivity : ComponentActivity() {
                             tint = TextMuted
                         )
                     }
+                }
+
+                if (notice != LockdownPanel.HomeNotice.NONE) {
+                    Spacer(Modifier.height(16.dp))
+                    LockdownNotice(notice)
                 }
 
                 Spacer(Modifier.height(20.dp))
@@ -339,6 +353,37 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
+     * Amber-outlined strip under the header whenever the scanner is not locked down (visual
+     * critique 2026-11-06 P1-1). Icon and words, not colour alone.
+     */
+    @Composable
+    private fun LockdownNotice(notice: LockdownPanel.HomeNotice) {
+        val text = when (notice) {
+            LockdownPanel.HomeNotice.KIOSK_OFF -> "Kiosk is off: this scanner is unlocked"
+            LockdownPanel.HomeNotice.NOT_PROVISIONED -> "Not provisioned: kiosk unavailable"
+            LockdownPanel.HomeNotice.NONE -> return
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(GraphiteSurface)
+                .border(1.dp, WarnAmber, RoundedCornerShape(12.dp))
+                .padding(horizontal = 14.dp, vertical = 10.dp)
+        ) {
+            Icon(
+                Icons.Filled.Warning,
+                contentDescription = null,
+                tint = WarnAmber,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(Modifier.size(10.dp))
+            Text(text, style = MaterialTheme.typography.bodyMedium, color = TextPrimary)
+        }
+    }
+
+    /**
      * Fixed-height tile so a two-line label or a "Not installed" line never makes one row
      * taller than its neighbours (UI audit launcher-08); a missing icon gets a warning
      * glyph instead of a blank square (launcher-09).
@@ -365,6 +410,8 @@ class MainActivity : ComponentActivity() {
                         .clip(RoundedCornerShape(12.dp)),
                     alpha = alpha
                 )
+            } else if (tile.entry.fieldColor != null && tile.entry.badge != null) {
+                MissingStationIcon(Color(tile.entry.fieldColor), tile.entry.badge)
             } else {
                 Box(
                     contentAlignment = Alignment.Center,
@@ -390,13 +437,57 @@ class MainActivity : ComponentActivity() {
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
-            if (!tile.installed) {
-                Text(
-                    "Not installed",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = WarnAmber,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1
+            // The status line is always laid out (blank when installed), so every tile centres
+            // the same block and icons line up across a row. Adding it only when missing lifted
+            // that tile's icon above its neighbours' (visual critique 2026-11-06 P3-10).
+            // The same line tags the PIN-revealed tools, which otherwise mixed in with the
+            // stations with nothing to say supervisor mode was on (P3-9).
+            Text(
+                when {
+                    !tile.installed -> "Not installed"
+                    tile.entry.supervisorOnly -> "Supervisor"
+                    else -> " "
+                },
+                style = MaterialTheme.typography.labelMedium,
+                color = if (tile.installed) AdminTealTint else WarnAmber,
+                textAlign = TextAlign.Center,
+                maxLines = 1
+            )
+        }
+    }
+
+    /**
+     * Placeholder for a station app that is not on the device: its own icon-pack field
+     * colour and numeral, dimmed, with an amber warning disc where the real icon has its
+     * badge. Replaces a generic grey square that dropped the station's identity (visual
+     * critique 2026-11-06 P2-5).
+     */
+    @Composable
+    private fun MissingStationIcon(field: Color, badge: String) {
+        Box(modifier = Modifier.size(56.dp)) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(56.dp)
+                    .alpha(0.45f)
+                    .clip(CircleShape)
+                    .background(field)
+            ) {
+                Text(badge, color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 26.sp)
+            }
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(22.dp)
+                    .align(Alignment.BottomEnd)
+                    .clip(CircleShape)
+                    .background(GraphiteSurface)
+            ) {
+                Icon(
+                    Icons.Filled.Warning,
+                    contentDescription = null,
+                    tint = WarnAmber,
+                    modifier = Modifier.size(16.dp)
                 )
             }
         }
@@ -433,7 +524,13 @@ class MainActivity : ComponentActivity() {
                 if (left == 0L) break
                 delay(1_000)
             }
-            if (result is PinGate.Result.LockedOut) result = null
+            if (result is PinGate.Result.LockedOut) {
+                result = null
+                // While disabled the field lost focus to Cancel, which then sat highlighted
+                // like a pressed button with no keyboard up (visual critique 2026-11-06 P2-3).
+                withFrameNanos { }
+                focusRequester.requestFocus()
+            }
         }
 
         // Focus (and so the keyboard) once the dialog window has had its first frame.
@@ -491,7 +588,7 @@ class MainActivity : ComponentActivity() {
                         cursorColor = AdminTealTint,
                         errorCursorColor = DangerRed,
                         focusedBorderColor = AdminTealTint,
-                        unfocusedBorderColor = GraphiteBorder,
+                        unfocusedBorderColor = FieldOutline,
                         disabledBorderColor = GraphiteBorder,
                         errorBorderColor = DangerRed,
                         focusedLabelColor = AdminTealTint,
@@ -534,17 +631,42 @@ class MainActivity : ComponentActivity() {
                         !isDeviceOwner -> {
                             Text(stringResource(R.string.lockdown_not_owner), color = TextMuted)
                             Spacer(Modifier.height(12.dp))
-                            SelectionContainer {
-                                Text(
-                                    stringResource(R.string.lockdown_provision_command),
-                                    color = TextPrimary,
-                                    fontFamily = FontFamily.Monospace,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    softWrap = false,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .horizontalScroll(rememberScrollState())
-                                )
+                            // Code well with a fade at the right edge: the bare line used to
+                            // stop mid-glyph with nothing to say it scrolls (visual critique
+                            // 2026-11-06 P2-6).
+                            val commandScroll = rememberScrollState()
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(GraphiteBackground)
+                                    .border(1.dp, GraphiteBorder, RoundedCornerShape(8.dp))
+                            ) {
+                                SelectionContainer {
+                                    Text(
+                                        stringResource(R.string.lockdown_provision_command),
+                                        color = TextPrimary,
+                                        fontFamily = FontFamily.Monospace,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        softWrap = false,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .horizontalScroll(commandScroll)
+                                            .padding(horizontal = 12.dp, vertical = 10.dp)
+                                    )
+                                }
+                                if (commandScroll.value < commandScroll.maxValue) {
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.CenterEnd)
+                                            .size(width = 32.dp, height = 36.dp)
+                                            .background(
+                                                Brush.horizontalGradient(
+                                                    listOf(Color.Transparent, GraphiteBackground)
+                                                )
+                                            )
+                                    )
+                                }
                             }
                         }
                         isKioskEnabled -> Text(
@@ -561,7 +683,12 @@ class MainActivity : ComponentActivity() {
                     }
                     if (LockdownPanel.offersRemoval(isDeviceOwner)) {
                         Spacer(Modifier.height(12.dp))
-                        TextButton(onClick = onRemoveOwner) {
+                        // No side padding, so the label lines up with the text above it
+                        // (visual critique 2026-11-06 P3-8).
+                        TextButton(
+                            onClick = onRemoveOwner,
+                            contentPadding = PaddingValues(horizontal = 0.dp, vertical = 8.dp),
+                        ) {
                             Text("Remove Device Owner", color = DangerRed)
                         }
                     }
@@ -573,9 +700,12 @@ class MainActivity : ComponentActivity() {
                         TextButton(onClick = onExitKiosk) {
                             Text("Exit Kiosk Mode", color = WarnAmber)
                         }
+                    // Filled teal, like Unlock: re-locking is the safe, routine action. In
+                    // red it read exactly like the irreversible Remove Device Owner beside it
+                    // (visual critique 2026-11-06 P2-4).
                     LockdownPanel.Action.ENTER_KIOSK ->
-                        TextButton(onClick = onEnterKiosk) {
-                            Text("Enter Kiosk Mode", color = DangerRed)
+                        Button(onClick = onEnterKiosk) {
+                            Text("Enter Kiosk Mode")
                         }
                     LockdownPanel.Action.NONE -> Unit
                 }
