@@ -55,4 +55,35 @@ class LockdownPanelTest {
         assertEquals(LockdownPanel.Action.EXIT_KIOSK, LockdownPanel.actionFor(owner, true))
         assertEquals(LockdownPanel.Action.ENTER_KIOSK, LockdownPanel.actionFor(owner, false))
     }
+
+    // Visual critique 2026-11-06 P1-1: with kiosk off the home grid looked exactly like a
+    // locked scanner, so a supervisor could walk away from an unlocked device unaware.
+
+    @Test
+    fun `home shows no lockdown notice while kiosk is active`() {
+        assertEquals(
+            LockdownPanel.HomeNotice.NONE,
+            LockdownPanel.homeNotice(isDeviceOwner = true, kioskEnabled = true)
+        )
+    }
+
+    @Test
+    fun `home warns when a supervisor has switched kiosk off`() {
+        assertEquals(
+            LockdownPanel.HomeNotice.KIOSK_OFF,
+            LockdownPanel.homeNotice(isDeviceOwner = true, kioskEnabled = false)
+        )
+    }
+
+    @Test
+    fun `home warns that an unprovisioned scanner is not locked down`() {
+        assertEquals(
+            LockdownPanel.HomeNotice.NOT_PROVISIONED,
+            LockdownPanel.homeNotice(isDeviceOwner = false, kioskEnabled = true)
+        )
+        assertEquals(
+            LockdownPanel.HomeNotice.NOT_PROVISIONED,
+            LockdownPanel.homeNotice(isDeviceOwner = false, kioskEnabled = false)
+        )
+    }
 }

@@ -89,4 +89,32 @@ class KioskAppsTest {
         assertTrue(KioskApps.showsTile(station3, installed = false))
         assertTrue(KioskApps.showsTile(station3, installed = true))
     }
+
+    // Visual critique 2026-11-06 P2-5: a missing station's tile fell back to a generic
+    // grey square and lost its identity. The fallback is drawn from these values, which
+    // must match the icon pack (UI_Design/Android app logo directions/README.md).
+
+    @Test
+    fun `each station carries its icon-pack field colour and badge`() {
+        val expected = mapOf(
+            "com.mitas.ppnam.station1aa" to (0xFF1B4DA0L to "1"),
+            "com.mitas.ppnam.station2aa" to (0xFF1D6B45L to "2"),
+            "com.mitas.ppnam.station3aa" to (0xFF7B1418L to "3"),
+            "com.mitas.ppnam.station4aa" to (0xFF55368CL to "4"),
+            "com.mitas.ppnam.station5aa" to (0xFFA85F14L to "5"),
+        )
+        expected.forEach { (pkg, identity) ->
+            val entry = KioskApps.entries.single { it.packageName == pkg }
+            assertEquals(pkg, identity.first, entry.fieldColor)
+            assertEquals(pkg, identity.second, entry.badge)
+        }
+    }
+
+    @Test
+    fun `supervisor tools have no suite identity to fall back to`() {
+        KioskApps.entries.filter { it.supervisorOnly }.forEach {
+            assertEquals(it.packageName, null, it.fieldColor)
+            assertEquals(it.packageName, null, it.badge)
+        }
+    }
 }
