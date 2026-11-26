@@ -12,8 +12,8 @@ android {
         applicationId = "com.mitas.ppnam.launcheraa"
         minSdk = 26
         targetSdk = 35
-        versionCode = 9
-        versionName = "2.0.0"
+        versionCode = 10
+        versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
