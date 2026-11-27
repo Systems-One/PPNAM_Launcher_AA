@@ -12,6 +12,11 @@ also locks the device down (kiosk mode), so only the PPNAM apps can be used.
 
 <p align="center">
   <img src="docs/assets/ppnam-logo.png" height="90" alt="PPNAM">
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/systems-one-dark.png">
+    <img src="docs/assets/systems-one.png" height="52" alt="Systems One">
+  </picture>
 </p>
 
 <p align="center">
